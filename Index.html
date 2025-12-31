@@ -1,0 +1,111 @@
+dating-app-replit/
+├── public/
+│   ├── index.html
+│   ├── discover.html
+│   ├── chat.html
+│   ├── profile.html
+│   ├── admin.html
+│   ├── styles.css
+│   └── admin.js
+├── server/
+│   ├── server.js
+│   ├── config/db.js
+│   ├── models/User.js
+│   ├── models/Message.js
+│   ├── routes/auth.js
+│   ├── routes/users.js
+│   ├── routes/chat.js
+│   └── middleware/auth.js
+├── package.json
+└── README.md
+{
+  "name": "dating-app-replit",
+  "version": "1.0.0",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.0",
+    "mongoose": "^7.0.5",
+    "socket.io": "^4.7.1"
+  }
+}
+const mongoose = require("mongoose");
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    });
+    console.log("MongoDB connected");
+  } catch (err) {
+    console.error(err.message);
+    process.exit(1);
+  }
+};
+module.exports = connectDB;
+const express = require("express");
+const connectDB = require("./config/db");
+const cors = require("cors");
+const http = require("http");
+const { Server } = require("socket.io");
+const path = require("path");
+connectDB();
+const app = express();
+app.use(cors());
+app.use(express.json());
+// API Routes
+app.use("/api/auth", require("./routes/auth"));
+app.use("/api/users", require("./routes/users"));
+app.use("/api/chat", require("./routes/chat"));
+// Serve frontend
+app.use(express.static(path.join(__dirname, "../public")))
+// Socket.io for real-time chat
+const server = http.createServer(app);
+const io = new Server(server);
+io.on("connection", socket => {
+  socket.on("sendMessage", data => io.emit("receiveMessage", data));
+});
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const mongoose = require("mongoose");
+const UserSchema = new mongoose.Schema({
+  username: String,
+  email: String,
+  password: String,
+  bio: String,
+  interests: [String],
+  photos: [String],
+  likes: [String],
+  matches: [String],
+  profileViews: [String],
+  isPremium: { type: Boolean, default: false },
+  role: { type: String, default: "user" }
+});
+module.exports = mongoose.model("User", UserSchema);
+const mongoose = require("mongoose");
+const MessageSchema = new mongoose.Schema({
+  sender: String,
+  receiver: String,
+  text: String,
+  read: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+module.exports = mongoose.model("Message", MessageSchema);
+const jwt = require("jsonwebtoken");
+
+module.exports = function(req, res, next) {
+  const token = req.header("x-auth-token");
+  if (!token) return res.status(401).json({ msg: "No token, authorization denied" });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded.user;
+    next();
+  } catch (err) {
+    res.status(401).json({ msg: "Token is not valid" });
+  }
+};
